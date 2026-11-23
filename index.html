@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{margin:0}[hidden]{display:none!important}</style>
+<title>MDF Panel Eşleştirici</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: atölye föyü — üstte hedef ve sonuç, altta 6 panelin kenar ölçüm kartları */
+:root{
+  --bg:#eef0ef; --surface:#ffffff; --line:#cfd5d3; --fg:#1d2423; --muted:#5d6967;
+  --mdf:#b89a72; --mdf-soft:#efe4d4; --accent:#1f5fa8; --accent-soft:#dde8f5;
+  --good:#2b7a4b; --warn:#a86a12; --bad:#b3362d;
+  --f-display:"Barlow Condensed","Arial Narrow",sans-serif;
+  --f-body:"Barlow",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#151a19; --surface:#1e2524; --line:#34403e; --fg:#e4ebe9; --muted:#9aa8a5;
+  --mdf:#c9a97d; --mdf-soft:#3a3125; --accent:#79aef0; --accent-soft:#1f3350;
+  --good:#5fc48a; --warn:#e0a54a; --bad:#ef7a70; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#151a19; --surface:#1e2524; --line:#34403e; --fg:#e4ebe9; --muted:#9aa8a5;
+  --mdf:#c9a97d; --mdf-soft:#3a3125; --accent:#79aef0; --accent-soft:#1f3350;
+  --good:#5fc48a; --warn:#e0a54a; --bad:#ef7a70; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.5}
+.wrap{max-width:1120px;margin:0 auto;padding-block:28px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:28px}
+h1,h2,h3{font-family:var(--f-display);font-weight:700;margin:0;text-wrap:balance;letter-spacing:.01em}
+h1{font-size:2.2rem;line-height:1.05}
+h2{font-size:1.45rem}
+h3{font-size:1.15rem}
+p{margin:0;max-width:68ch}
+.muted{color:var(--muted)}
+.label{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.mono,input,td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+header{display:grid;gap:10px}
+.controls{display:flex;flex-wrap:wrap;gap:16px;align-items:end;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px}
+.field{display:grid;gap:4px}
+.field input{width:9rem;font-size:1.25rem;padding:6px 10px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--fg)}
+button{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:8px 14px;border-radius:4px;cursor:pointer}
+button:hover{border-color:var(--accent);color:var(--accent)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.example{background:var(--mdf-soft);border:1px dashed var(--mdf);padding:8px 12px;border-radius:4px;font-size:.9rem}
+/* Sonuç */
+.result{display:grid;gap:14px}
+.pairs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.pair{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;display:grid;gap:10px;min-width:0}
+.pair .title{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.pair .big{font-family:var(--f-mono);font-size:1.7rem;font-weight:500}
+.chip{font-family:var(--f-mono);font-size:.8rem;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.chip.good{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+.chip.warn{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.chip.bad{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:.9rem}
+.kv dt{color:var(--muted)} .kv dd{margin:0;font-family:var(--f-mono)}
+.howto{font-size:.88rem;background:var(--accent-soft);padding:8px 10px;border-radius:4px}
+.tablebox{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:6px}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{padding:7px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:600;color:var(--muted);font-size:.78rem;text-transform:uppercase;letter-spacing:.06em}
+tr.best td{background:var(--accent-soft)}
+tr:last-child td{border-bottom:0}
+/* Panel kartları */
+.panels{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px;display:grid;gap:10px;min-width:0}
+.panel .head{display:flex;justify-content:space-between;align-items:baseline}
+.sq{display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(5,auto);gap:4px;align-items:center}
+.sq input{width:100%;min-width:0;font-size:.85rem;padding:5px 4px;text-align:center;border:1px solid var(--line);border-radius:3px;background:var(--bg);color:var(--fg)}
+.sq input.bad{border-color:var(--bad)}
+.face{grid-column:2/5;grid-row:2/5;align-self:stretch;background:var(--mdf-soft);border:2px solid var(--mdf);border-radius:2px;display:grid;place-items:center;text-align:center;font-size:.78rem;color:var(--muted);padding:6px;min-height:110px}
+.face b{display:block;font-family:var(--f-mono);font-size:1.1rem;color:var(--fg);font-weight:500}
+.edge-tag{font-size:.7rem;font-weight:700;color:var(--mdf)}
+.matrix td,.matrix th{text-align:center}
+details{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 16px}
+summary{cursor:pointer;font-weight:600}
+details ol{margin:10px 0 0;padding-left:20px;display:grid;gap:6px;max-width:72ch}
+@media (prefers-reduced-motion:no-preference){.pair{transition:border-color .2s}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="label">6 MDF panel · 3 çift · kenar başına 3 ölçüm</div>
+    <h1>MDF Panel Eşleştirici</h1>
+    <p class="muted">Her panelin 12 kenar ölçümünü gir, hedef çift kalınlığını yaz. Sayfa 15 olası eşleştirmeyi dener, çift ortalamaları hedefe en yakın olanı ve her çiftte kalınlık farkını en aza indiren yapıştırma yönünü gösterir.</p>
+  </header>
+
+  <section class="controls" aria-label="Ayarlar">
+    <div class="field">
+      <label class="label" for="target">Hedef çift kalınlığı (mm)</label>
+      <input id="target" type="number" step="0.01" inputmode="decimal" value="36">
+    </div>
+    <div class="field">
+      <label class="label" for="tol">Tolerans ± (mm)</label>
+      <input id="tol" type="number" step="0.01" inputmode="decimal" value="0.10">
+    </div>
+    <button id="clear" type="button">Tüm ölçümleri temizle</button>
+    <button id="sample" type="button">Örnek verileri yükle</button>
+  </section>
+
+  <div id="exampleNote" class="example" hidden>Gösterilen değerler örnektir. Kendi ölçümlerini girmek için önce “Tüm ölçümleri temizle”ye bas.</div>
+
+  <section class="result" aria-live="polite">
+    <h2>En iyi eşleştirme</h2>
+    <div id="summary" class="muted"></div>
+    <div id="pairs" class="pairs"></div>
+  </section>
+
+  <details>
+    <summary>Ölçümleri nasıl girmeliyim?</summary>
+    <ol>
+      <li>Paneli <b>dışa bakacak yüzü</b> sana dönük koy. Üst kenar K1, sağ K2, alt K3, sol K4.</li>
+      <li>Her kenarda saat yönünde ilerleyerek başta, ortada ve sonda ölçüm al: K1 soldan sağa, K2 yukarıdan aşağı, K3 sağdan sola, K4 aşağıdan yukarı. Kutular bu sıraya göre yerleştirildi.</li>
+      <li>Kenar başına ölçümleri her panelde aynı konumlardan (örneğin köşeden 3 cm içeriden ve tam ortadan) al. Yapıştırma yönü hesabı bunu varsayar.</li>
+      <li>İki panel sırt sırta yapıştırılınca ikinci panel ters döner. Hesap bu aynalamayı ve 4 olası dönüşü dikkate alır.</li>
+    </ol>
+  </details>
+
+  <section style="display:grid;gap:14px">
+    <h2>Panel ölçümleri</h2>
+    <div id="panels" class="panels"></div>
+  </section>
+
+  <section style="display:grid;gap:10px">
+    <h2>Tüm eşleştirmeler</h2>
+    <p class="muted">Sıralama: önce hedeften en büyük sapma, eşitlikte toplam sapma.</p>
+    <div class="tablebox"><table id="allTable"></table></div>
+  </section>
+
+  <section style="display:grid;gap:10px">
+    <h2>Çift tablosu</h2>
+    <p class="muted">Her hücre iki panelin ortalamaları toplamının hedeften farkı (mm).</p>
+    <div class="tablebox"><table id="matrix" class="matrix"></table></div>
+  </section>
+</div>
+
+<script>
+(function(){
+const N=6, PTS=12, KEY="mdf-eslestirici-v1";
+const EDGE=["K1 (üst)","K2 (sağ)","K3 (alt)","K4 (sol)"];
+let data=[], isExample=false;
+
+function sampleData(){
+  let s=7; const r=()=>{s=(s*9301+49297)%233280;return s/233280};
+  const bases=[17.82,18.11,17.95,18.24,17.70,18.06];
+  return bases.map(b=>{const tilt=(r()-.5)*.3;return Array.from({length:PTS},(_,i)=>{
+    const ang=i/PTS*2*Math.PI;return +(b+tilt*Math.cos(ang)+(r()-.5)*.08).toFixed(2)})});
+}
+function load(){
+  try{const raw=localStorage.getItem(KEY);if(raw){const o=JSON.parse(raw);
+    if(Array.isArray(o.data)&&o.data.length===N){data=o.data;isExample=!!o.example;
+      if(o.target!=null)target.value=o.target;if(o.tol!=null)tol.value=o.tol;return}}}catch(e){}
+  data=sampleData();isExample=true;
+}
+function save(){try{localStorage.setItem(KEY,JSON.stringify({data,example:isExample,target:target.value,tol:tol.value}))}catch(e){}}
+
+const target=document.getElementById("target"), tol=document.getElementById("tol");
+
+// Grid positions of the 12 inputs around the square (clockwise on the outer face)
+const POS=[[1,2],[1,3],[1,4],[2,5],[3,5],[4,5],[5,4],[5,3],[5,2],[4,1],[3,1],[2,1]];
+
+function buildPanels(){
+  const host=document.getElementById("panels");host.innerHTML="";
+  for(let p=0;p<N;p++){
+    const card=document.createElement("div");card.className="panel";
+    card.innerHTML=`<div class="head"><h3>Panel ${p+1}</h3><span class="label" id="pm${p}"></span></div>`;
+    const sq=document.createElement("div");sq.className="sq";
+    POS.forEach(([r,c],i)=>{
+      const inp=document.createElement("input");
+      inp.type="text";inp.inputMode="decimal";inp.id=`p${p}m${i}`;
+      inp.setAttribute("aria-label",`Panel ${p+1}, ${EDGE[Math.floor(i/3)]}, ölçüm ${i%3+1}`);
+      inp.style.gridRow=r;inp.style.gridColumn=c;
+      const v=data[p][i];inp.value=(v===null||v===undefined||v==="")?"":v;
+      inp.addEventListener("input",()=>{
+        const t=inp.value.replace(",",".").trim();
+        const n=t===""?null:Number(t);
+        inp.classList.toggle("bad",t!==""&&!isFinite(n));
+        data[p][i]=(t===""||!isFinite(n))?null:n;
+        if(isExample){isExample=false;}
+        update();
+      });
+      sq.appendChild(inp);
+    });
+    const face=document.createElement("div");face.className="face";face.id=`face${p}`;
+    sq.appendChild(face);
+    for(const [txt,r,c] of [["K1",1,1],["K2",1,5],["K3",5,5],["K4",5,1]]){
+      const t=document.createElement("span");t.className="edge-tag";t.textContent=txt;
+      t.style.gridRow=r;t.style.gridColumn=c;t.style.textAlign="center";sq.appendChild(t);
+    }
+    card.appendChild(sq);host.appendChild(card);
+  }
+}
+
+const vals=p=>data[p].filter(v=>typeof v==="number"&&isFinite(v));
+const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
+const f2=x=>x.toFixed(2), f3=x=>x.toFixed(3);
+const sgn=x=>(x>0?"+":x<0?"−":"±")+Math.abs(x).toFixed(3);
+
+function pairings(items){
+  if(items.length===0)return[[]];
+  const [a,...rest]=items, out=[];
+  rest.forEach((b,idx)=>{const rem=rest.filter((_,j)=>j!==idx);
+    for(const sub of pairings(rem))out.push([[a,b],...sub]);});
+  return out;
+}
+
+// Best back-to-back orientation: point i of A meets point (2-i+3k) mod 12 of B
+function bestOrientation(a,b){
+  const A=data[a],B=data[b];let best=null;
+  for(let k=0;k<4;k++){
+    const sums=[];
+    for(let i=0;i<PTS;i++){const j=((2-i+3*k)%PTS+PTS)%PTS;
+      if(typeof A[i]==="number"&&typeof B[j]==="number")sums.push(A[i]+B[j]);}
+    if(!sums.length)continue;
+    const m=mean(sums), sd=Math.sqrt(mean(sums.map(s=>(s-m)**2)));
+    const o={k,min:Math.min(...sums),max:Math.max(...sums),sd};
+    if(!best||o.max-o.min<best.max-best.min-1e-9||(Math.abs(o.max-o.min-(best.max-best.min))<1e-9&&o.sd<best.sd))best=o;
+  }
+  return best;
+}
+
+function chipFor(dev,t){const a=Math.abs(dev);return a<=t?"good":a<=2*t?"warn":"bad";}
+
+function update(){
+  save();
+  document.getElementById("exampleNote").hidden=!isExample;
+  const T=parseFloat(String(target.value).replace(",",".")), TOL=Math.abs(parseFloat(String(tol.value).replace(",",".")))||0;
+  const means=[];
+  for(let p=0;p<N;p++){
+    const v=vals(p);means[p]=v.length?mean(v):null;
+    document.getElementById(`pm${p}`).textContent=`${v.length}/12 ölçüm`;
+    const face=document.getElementById(`face${p}`);
+    face.innerHTML=v.length?`<div>ortalama<b>${f3(means[p])}</b>aralık ${f2(Math.min(...v))}–${f2(Math.max(...v))}</div>`:`<div>dış yüz<br>ölçüm gir</div>`;
+  }
+  const pairsEl=document.getElementById("pairs"),sumEl=document.getElementById("summary");
+  const tbl=document.getElementById("allTable"),mx=document.getElementById("matrix");
+  if(means.some(m=>m===null)||!isFinite(T)){
+    sumEl.textContent=!isFinite(T)?"Hedef kalınlığı gir.":"Sonuç için her panelden en az bir ölçüm gerekli.";
+    pairsEl.innerHTML="";tbl.innerHTML="";mx.innerHTML="";return;
+  }
+  const ranked=pairings([0,1,2,3,4,5]).map(pr=>{
+    const devs=pr.map(([a,b])=>means[a]+means[b]-T);
+    return{pr,devs,worst:Math.max(...devs.map(Math.abs)),total:devs.reduce((x,d)=>x+Math.abs(d),0)};
+  }).sort((x,y)=>x.worst-y.worst||x.total-y.total);
+
+  const best=ranked[0];
+  const okCount=best.devs.filter(d=>Math.abs(d)<=TOL).length;
+  sumEl.innerHTML=`En büyük sapma <span class="mono">${f3(best.worst)} mm</span>. ${okCount}/3 çift ±${f2(TOL)} mm tolerans içinde.`;
+  pairsEl.innerHTML=best.pr.map(([a,b],i)=>{
+    const S=means[a]+means[b],d=S-T,o=bestOrientation(a,b);
+    return `<article class="pair">
+      <div class="title"><h3>Panel ${a+1} + Panel ${b+1}</h3><span class="chip ${chipFor(d,TOL)}">${sgn(d)} mm</span></div>
+      <div><div class="label">Ortalama çift kalınlığı</div><div class="big">${f3(S)}</div></div>
+      <dl class="kv"><dt>Panel ${a+1} ort.</dt><dd>${f3(means[a])}</dd><dt>Panel ${b+1} ort.</dt><dd>${f3(means[b])}</dd>
+      ${o?`<dt>Noktasal en ince</dt><dd>${f2(o.min)}</dd><dt>Noktasal en kalın</dt><dd>${f2(o.max)}</dd><dt>Fark</dt><dd>${f2(o.max-o.min)}</dd>`:""}</dl>
+      ${o?`<div class="howto">Sırt sırta yapıştır: Panel ${a+1}'in <b>${EDGE[0]}</b> kenarı, Panel ${b+1}'in <b>${EDGE[o.k]}</b> kenarıyla üst üste gelsin.</div>`:""}
+    </article>`}).join("");
+
+  tbl.innerHTML=`<thead><tr><th>#</th><th>Çift 1</th><th>Çift 2</th><th>Çift 3</th><th>En büyük sapma</th><th>Toplam sapma</th></tr></thead><tbody>`+
+    ranked.map((r,i)=>`<tr class="${i===0?"best":""}"><td class="num">${i+1}</td>${r.pr.map(([a,b],j)=>`<td class="num">P${a+1}+P${b+1} <span class="muted">${sgn(r.devs[j])}</span></td>`).join("")}<td class="num">${f3(r.worst)}</td><td class="num">${f3(r.total)}</td></tr>`).join("")+`</tbody>`;
+
+  let h=`<thead><tr><th></th>${means.map((_,j)=>`<th>P${j+1}</th>`).join("")}</tr></thead><tbody>`;
+  for(let i=0;i<N;i++){h+=`<tr><th>P${i+1}</th>`;
+    for(let j=0;j<N;j++){if(i===j){h+=`<td class="muted">—</td>`;continue}
+      const d=means[i]+means[j]-T;h+=`<td class="num"><span class="chip ${chipFor(d,TOL)}">${sgn(d)}</span></td>`;}
+    h+=`</tr>`;}
+  mx.innerHTML=h+`</tbody>`;
+}
+
+document.getElementById("clear").addEventListener("click",()=>{
+  data=Array.from({length:N},()=>Array(PTS).fill(null));isExample=false;buildPanels();update();});
+document.getElementById("sample").addEventListener("click",()=>{data=sampleData();isExample=true;buildPanels();update();});
+target.addEventListener("input",update);tol.addEventListener("input",update);
+
+load();buildPanels();update();
+})();
+</script>
+
+</html>
