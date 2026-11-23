@@ -85,17 +85,17 @@ details ol{margin:10px 0 0;padding-left:20px;display:grid;gap:6px;max-width:72ch
   <header>
     <div class="label">6 MDF panel · 3 çift · kenar başına 3 ölçüm</div>
     <h1>MDF Panel Eşleştirici</h1>
-    <p class="muted">Her panelin 12 kenar ölçümünü gir, hedef çift kalınlığını yaz. Sayfa 15 olası eşleştirmeyi dener, çift ortalamaları hedefe en yakın olanı ve her çiftte kalınlık farkını en aza indiren yapıştırma yönünü gösterir.</p>
+    <p class="muted">Her panelin 12 kenar ölçümünü gir. Sayfa 15 olası eşleştirmeyi ve her çift için 4 yapıştırma yönünü dener. Amaç, yapıştırılmış çiftte köşeler ve kenarlar arasındaki kalınlık farkını (dalgalanmayı) en aza indirmek. Ortalama kalınlık yalnızca bilgi olarak gösterilir.</p>
   </header>
 
   <section class="controls" aria-label="Ayarlar">
     <div class="field">
-      <label class="label" for="target">Hedef çift kalınlığı (mm)</label>
-      <input id="target" type="number" step="0.01" inputmode="decimal" value="36">
+      <label class="label" for="tol">İzin verilen dalgalanma (mm)</label>
+      <input id="tol" type="number" step="0.01" inputmode="decimal" value="0.8">
     </div>
     <div class="field">
-      <label class="label" for="tol">Tolerans ± (mm)</label>
-      <input id="tol" type="number" step="0.01" inputmode="decimal" value="0.10">
+      <label class="label" for="target">Referans çift kalınlığı (mm)</label>
+      <input id="target" type="number" step="0.01" inputmode="decimal" value="36">
     </div>
     <button id="clear" type="button">Tüm ölçümleri temizle</button>
     <button id="sample" type="button">Örnek verileri yükle</button>
@@ -126,20 +126,20 @@ details ol{margin:10px 0 0;padding-left:20px;display:grid;gap:6px;max-width:72ch
 
   <section style="display:grid;gap:10px">
     <h2>Tüm eşleştirmeler</h2>
-    <p class="muted">Sıralama: önce hedeften en büyük sapma, eşitlikte toplam sapma.</p>
+    <p class="muted">Her çift en iyi yönüyle hesaplandı. Sıralama: önce en kötü çiftin dalgalanması, eşitlikte üç çiftin toplam dalgalanması. Hücrelerde çiftin dalgalanması (mm) yazar.</p>
     <div class="tablebox"><table id="allTable"></table></div>
   </section>
 
   <section style="display:grid;gap:10px">
     <h2>Çift tablosu</h2>
-    <p class="muted">Her hücre iki panelin ortalamaları toplamının hedeften farkı (mm).</p>
+    <p class="muted">Her hücre, iki panel en iyi yönde yapıştırıldığında en kalın ve en ince nokta arasındaki fark (mm).</p>
     <div class="tablebox"><table id="matrix" class="matrix"></table></div>
   </section>
 </div>
 
 <script>
 (function(){
-const N=6, PTS=12, KEY="mdf-eslestirici-v1";
+const N=6, PTS=12, KEY="mdf-eslestirici-v2";
 const EDGE=["K1 (üst)","K2 (sağ)","K3 (alt)","K4 (sol)"];
 let data=[], isExample=false;
 
@@ -222,7 +222,12 @@ function bestOrientation(a,b){
   return best;
 }
 
-function chipFor(dev,t){const a=Math.abs(dev);return a<=t?"good":a<=2*t?"warn":"bad";}
+function chipFor(r,lim){return r<=lim*0.75?"good":r<=lim?"warn":"bad";}
+
+// Point sums for pair (a,b) in orientation k, laid out on A's 12 positions
+function pointSums(a,b,k){const A=data[a],B=data[b];
+  return Array.from({length:PTS},(_,i)=>{const j=((2-i+3*k)%PTS+PTS)%PTS;
+    return(typeof A[i]==="number"&&typeof B[j]==="number")?A[i]+B[j]:null});}
 
 function update(){
   save();
@@ -241,31 +246,39 @@ function update(){
     sumEl.textContent=!isFinite(T)?"Hedef kalınlığı gir.":"Sonuç için her panelden en az bir ölçüm gerekli.";
     pairsEl.innerHTML="";tbl.innerHTML="";mx.innerHTML="";return;
   }
+  // Best orientation for every possible pair
+  const O={};
+  for(let i=0;i<N;i++)for(let j=i+1;j<N;j++){const o=bestOrientation(i,j);O[i+"-"+j]=o;}
+  const rng=(a,b)=>{const o=O[Math.min(a,b)+"-"+Math.max(a,b)];return o?o.max-o.min:Infinity};
   const ranked=pairings([0,1,2,3,4,5]).map(pr=>{
+    const rs=pr.map(([a,b])=>rng(a,b));
     const devs=pr.map(([a,b])=>means[a]+means[b]-T);
-    return{pr,devs,worst:Math.max(...devs.map(Math.abs)),total:devs.reduce((x,d)=>x+Math.abs(d),0)};
-  }).sort((x,y)=>x.worst-y.worst||x.total-y.total);
+    return{pr,rs,worst:Math.max(...rs),total:rs.reduce((x,y)=>x+y,0),avgWorst:Math.max(...devs.map(Math.abs))};
+  }).sort((x,y)=>x.worst-y.worst||x.total-y.total||x.avgWorst-y.avgWorst);
 
   const best=ranked[0];
-  const okCount=best.devs.filter(d=>Math.abs(d)<=TOL).length;
-  sumEl.innerHTML=`En büyük sapma <span class="mono">${f3(best.worst)} mm</span>. ${okCount}/3 çift ±${f2(TOL)} mm tolerans içinde.`;
-  pairsEl.innerHTML=best.pr.map(([a,b],i)=>{
-    const S=means[a]+means[b],d=S-T,o=bestOrientation(a,b);
+  const okCount=best.rs.filter(r=>r<=TOL).length;
+  sumEl.innerHTML=`En dalgalı çiftte fark <span class="mono">${f2(best.worst)} mm</span>. ${okCount}/3 çift ${f2(TOL)} mm sınırının altında.`;
+  pairsEl.innerHTML=best.pr.map(([a,b])=>{
+    const o=bestOrientation(a,b),S=means[a]+means[b],d=S-T,r=o.max-o.min;
+    const ps=pointSums(a,b,o.k);
+    const edgeRows=[0,1,2,3].map(e=>`<dt>${EDGE[e]}</dt><dd>${ps.slice(e*3,e*3+3).map(v=>v===null?"–":f2(v)).join(" · ")}</dd>`).join("");
     return `<article class="pair">
-      <div class="title"><h3>Panel ${a+1} + Panel ${b+1}</h3><span class="chip ${chipFor(d,TOL)}">${sgn(d)} mm</span></div>
-      <div><div class="label">Ortalama çift kalınlığı</div><div class="big">${f3(S)}</div></div>
-      <dl class="kv"><dt>Panel ${a+1} ort.</dt><dd>${f3(means[a])}</dd><dt>Panel ${b+1} ort.</dt><dd>${f3(means[b])}</dd>
-      ${o?`<dt>Noktasal en ince</dt><dd>${f2(o.min)}</dd><dt>Noktasal en kalın</dt><dd>${f2(o.max)}</dd><dt>Fark</dt><dd>${f2(o.max-o.min)}</dd>`:""}</dl>
-      ${o?`<div class="howto">Sırt sırta yapıştır: Panel ${a+1}'in <b>${EDGE[0]}</b> kenarı, Panel ${b+1}'in <b>${EDGE[o.k]}</b> kenarıyla üst üste gelsin.</div>`:""}
+      <div class="title"><h3>Panel ${a+1} + Panel ${b+1}</h3><span class="chip ${chipFor(r,TOL)}">${r<=TOL?"sınır içinde":"sınırı aşıyor"}</span></div>
+      <div><div class="label">Dalgalanma (en kalın − en ince)</div><div class="big">${f2(r)} mm</div></div>
+      <div class="howto">Sırt sırta yapıştır: Panel ${a+1}'in <b>${EDGE[0]}</b> kenarı, Panel ${b+1}'in <b>${EDGE[o.k]}</b> kenarıyla üst üste gelsin.</div>
+      <div class="label">Çift kalınlığı, Panel ${a+1}'in kenarlarına göre</div>
+      <dl class="kv">${edgeRows}</dl>
+      <dl class="kv"><dt>En ince / en kalın</dt><dd>${f2(o.min)} / ${f2(o.max)}</dd><dt>Ortalama</dt><dd>${f3(S)} <span class="muted">(${sgn(d)})</span></dd></dl>
     </article>`}).join("");
 
-  tbl.innerHTML=`<thead><tr><th>#</th><th>Çift 1</th><th>Çift 2</th><th>Çift 3</th><th>En büyük sapma</th><th>Toplam sapma</th></tr></thead><tbody>`+
-    ranked.map((r,i)=>`<tr class="${i===0?"best":""}"><td class="num">${i+1}</td>${r.pr.map(([a,b],j)=>`<td class="num">P${a+1}+P${b+1} <span class="muted">${sgn(r.devs[j])}</span></td>`).join("")}<td class="num">${f3(r.worst)}</td><td class="num">${f3(r.total)}</td></tr>`).join("")+`</tbody>`;
+  tbl.innerHTML=`<thead><tr><th>#</th><th>Çift 1</th><th>Çift 2</th><th>Çift 3</th><th>En kötü</th><th>Toplam</th></tr></thead><tbody>`+
+    ranked.map((r,i)=>`<tr class="${i===0?"best":""}"><td class="num">${i+1}</td>${r.pr.map(([a,b],j)=>`<td class="num">P${a+1}+P${b+1} <span class="muted">${f2(r.rs[j])}</span></td>`).join("")}<td class="num">${f2(r.worst)}</td><td class="num">${f2(r.total)}</td></tr>`).join("")+`</tbody>`;
 
   let h=`<thead><tr><th></th>${means.map((_,j)=>`<th>P${j+1}</th>`).join("")}</tr></thead><tbody>`;
   for(let i=0;i<N;i++){h+=`<tr><th>P${i+1}</th>`;
     for(let j=0;j<N;j++){if(i===j){h+=`<td class="muted">—</td>`;continue}
-      const d=means[i]+means[j]-T;h+=`<td class="num"><span class="chip ${chipFor(d,TOL)}">${sgn(d)}</span></td>`;}
+      const r=rng(i,j);h+=`<td class="num"><span class="chip ${chipFor(r,TOL)}">${f2(r)}</span></td>`;}
     h+=`</tr>`;}
   mx.innerHTML=h+`</tbody>`;
 }
